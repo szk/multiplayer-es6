@@ -98,8 +98,7 @@ class SvPresenter
 
         //Configure the socket.io connection settings.
         //See http://socket.io/
-        sio.use((socket_, next_) => { let handshake = socket_.request;
-                                      next_(); });
+        sio.use((socket_, next_) => { let handshake = socket_.request; next_(); });
 
         //Enter the session server code. The session server handles
         //client connections looking for a session, creating sessions,
@@ -126,9 +125,10 @@ class SvPresenter
             //Useful to know when someone connects
             console.log('\t socket.io:: socket ' + socket_.userid + ' connected');
 
+            //// register events
             //Now we want to handle some of the messages that clients will send.
             //They send messages here, and we send them to the sv to handle.
-            socket_.on('message', (m_) => { this.on_receive_(socket_, m_); });
+            socket_.on('message', (m_) => { this.on_recv_message_(socket_, m_); });
 
             //When this client disconnects, we want to tell the session server
             //about that as well, so it can remove them from the session they are
@@ -149,7 +149,7 @@ class SvPresenter
 
     log_() { if (this.verbose) { console.log.apply(this, arguments); } }
 
-    on_receive_(socket_, packet_)
+    on_recv_message_(socket_, packet_)
     {
         if (this.fake_latency && packet_.split('.')[0].substr(0, 1) == 'i')
         {
@@ -234,57 +234,12 @@ class SvPresenter
         if (!session) { this.log_('that session was not found!'); return; }
 
         //stop the session updates immediate
-        session.stop_update();
-        //if the session has two avatars, the one is leaving
-        if (session.avatar_count > 1)
-        {
-            //send the avatars the message the session is ending
-            if (user_id_ == session.socket_host.userid)
-            {
-                //the host left, oh snap. Lets try join another session
-                if (session.socket_client)
-                {
-                    //tell them the session is over
-                    session.socket_client.send('s.e');
-                    //now look for/create a new session.
-                    this.find_session_(session.socket_client);
-                }
-            }
-            else
-            {
-                //the other avatar left, we were hosting
-                if (session.socket_host)
-                {
-                    //tell the client the session is ended
-                    session.socket_host.send('s.e');
-                    //i am no longer hosting, this session is going down
-                    session.socket_host.hosting = false;
-                    //now look for/create a new session.
-                    this.find_session_(session.socket_host);
-                }
-            }
-        }
+        let left_socket = session.stop(user_id_);
+        if (left_socket) { this.find_session_(left_socket); }
+
         delete this.sessions[session_id_];
         this.session_count--;
         this.log_('session removed. there are now ' + this.session_count + ' sessions');
-    }
-
-    start_session_(session_)
-    {
-        //right so a session has 2 avatars and wants to begin
-        //the host already knows they are hosting,
-        //tell the other client they are joining a session
-        //s=server message, j=you are joining, send them the host id
-        session_.socket_client.send('s.j.' + session_.socket_host.userid);
-        session_.socket_client.session = session_;
-
-        //now we tell both that the session is ready to start
-        //clients will reset their positions in this case.
-        session_.socket_client.send('s.r.' + String(cm.get_owntime()).replace('.', '-'));
-        session_.socket_host.send('s.r.' + String(cm.get_owntime()).replace('.', '-'));
-
-        //set this flag, so that the update loop can run it.
-        session_.active = true;
     }
 
     find_session_(socket_)
@@ -297,28 +252,15 @@ class SvPresenter
         //lets see if one needs another avatar
         let joined_a_session = false;
         //Check the list of sessions for an open session
-        for (let sessionid in this.sessions) // for all sessions
+        for (let session_id in this.sessions) // for all sessions
         {
             //only care about our own properties.
-            if (!this.sessions.hasOwnProperty(sessionid)) { continue; }
+            if (!this.sessions.hasOwnProperty(session_id)) { continue; }
             //get the session we are checking against
-            let session = this.sessions[sessionid];
+            let session = this.sessions[session_id];
 
-            //If the session is a avatar short
-            if (session.avatar_count < 2) //if less than 2 avatars
-            {
-                //someone wants us to join!
-                joined_a_session = true;
-                //increase the avatar count and store
-                //the avatar as the client of this session
-                session.socket_client = socket_;
-                session.avatars.other.socket = socket_;
-                session.avatar_count++;
-
-                //start running the session on the server,
-                //which will tell them to respawn/start
-                this.start_session_(session);
-            }
+            //someone wants us to join!
+            joined_a_session = session.try_to_start(socket_) || joined_a_session;
         }
 
         //now if we didn't join a session,
