@@ -193,7 +193,7 @@ var ClView = (function () {
     function ClView(viewport_) {
         _classCallCheck(this, ClView);
 
-        this.ctx_ = viewport_.getContext('2d');
+        this.ctx = viewport_.getContext('2d');
         //Create a keyboard handler
         this.keyboard = new THREEx.KeyboardState();
         this.input_queue = [];
@@ -240,27 +240,49 @@ var ClView = (function () {
         key: 'draw',
         value: function draw(avatars_) {
             //Clear the screen area
-            this.ctx_.clearRect(0, 0, 720, 480);
+            this.ctx.clearRect(0, 0, 720, 480);
             //draw help/information if required
             this.show_info_(avatars_);
             //Now they should have updated, we can draw the entity
-            this.show_avatar_(avatars_.other);
-            //And then we finally draw
-            this.show_avatar_(avatars_.self);
+
+            var _iteratorNormalCompletion = true;
+            var _didIteratorError = false;
+            var _iteratorError = undefined;
+
+            try {
+                for (var _iterator = avatars_[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+                    var avatar = _step.value;
+
+                    this.show_avatar_(avatar);
+                }
+            } catch (err) {
+                _didIteratorError = true;
+                _iteratorError = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion && _iterator['return']) {
+                        _iterator['return']();
+                    }
+                } finally {
+                    if (_didIteratorError) {
+                        throw _iteratorError;
+                    }
+                }
+            }
         }
     }, {
         key: 'draw_debug',
-        value: function draw_debug(avatars_, ghosts_, naive_approach_, show_dest_pos_, show_sv_pos_) {
+        value: function draw_debug(avatars_, ghosts_, dests_, naive_approach_, show_dest_pos_, show_sv_pos_) {
             if (!naive_approach_) {
                 //and these
                 if (show_dest_pos_) {
-                    this.show_avatar_(ghosts_.pos_other);
+                    this.show_avatar_(ghosts_[1]);
                 }
 
                 //and lastly draw these
                 if (show_sv_pos_) {
-                    this.show_avatar_(ghosts_.sv_pos_self);
-                    this.show_avatar_(ghosts_.sv_pos_other);
+                    this.show_avatar_(ghosts_[0]);
+                    this.show_avatar_(ghosts_[1]);
                 }
             }
         }
@@ -268,39 +290,39 @@ var ClView = (function () {
         key: 'show_avatar_',
         value: function show_avatar_(avatar_) {
             //Set the color for this avatar
-            this.ctx_.fillStyle = avatar_.color;
+            this.ctx.fillStyle = avatar_.color;
             //Draw a rectangle for us
-            this.ctx_.fillRect(avatar_.pos.x - avatar_.size.hx, avatar_.pos.y - avatar_.size.hy, avatar_.size.x, avatar_.size.y);
+            this.ctx.fillRect(avatar_.pos.x - avatar_.size.hx, avatar_.pos.y - avatar_.size.hy, avatar_.size.x, avatar_.size.y);
             //Draw a status update
-            this.ctx_.fillStyle = avatar_.info_color;
-            this.ctx_.fillText(avatar_.state, avatar_.pos.x + 10, avatar_.pos.y + 4);
+            this.ctx.fillStyle = avatar_.info_color;
+            this.ctx.fillText(avatar_.state, avatar_.pos.x + 10, avatar_.pos.y + 4);
         }
     }, {
         key: 'show_info_',
         value: function show_info_(avatars_) {
             //We don't want this to be too distracting
-            this.ctx_.fillStyle = 'rgba(255,255,255,0.3)';
+            this.ctx.fillStyle = 'rgba(255,255,255,0.3)';
 
             //They can hide the help with the debug GUI
             if (this.show_help) {
-                this.ctx_.fillText('net_offset : local offset of others avatars and their server updates. Avatars are net_offset "in the past" so we can smoothly draw them interpolated.', 10, 30);
-                this.ctx_.fillText('server_time : last known session time on server', 10, 70);
-                this.ctx_.fillText('client_time : delayed session time on client for other avatars only (includes the net_offset)', 10, 90);
-                this.ctx_.fillText('net_latency : Time from you to the server. ', 10, 130);
-                this.ctx_.fillText('net_ping : Time from you to the server and back. ', 10, 150);
-                this.ctx_.fillText('fake_lag : Add fake ping/lag for testing, applies only to your inputs (watch sv_pos block!). ', 10, 170);
-                this.ctx_.fillText('client_smoothing/client_smooth : When updating avatars information from the server, it can smooth them out.', 10, 210);
-                this.ctx_.fillText(' This only applies to other clients when prediction is enabled, and applies to local avatar with no prediction.', 170, 230);
+                this.ctx.fillText('net_offset : local offset of others avatars and their server updates. Avatars are net_offset "in the past" so we can smoothly draw them interpolated.', 10, 30);
+                this.ctx.fillText('sv_time : last known session time on server', 10, 70);
+                this.ctx.fillText('cl_time : delayed session time on client for other avatars only (includes the net_offset)', 10, 90);
+                this.ctx.fillText('net_latency : Time from you to the server. ', 10, 130);
+                this.ctx.fillText('net_ping : Time from you to the server and back. ', 10, 150);
+                this.ctx.fillText('fake_lag : Add fake ping/lag for testing, applies only to your inputs (watch sv_pos block!). ', 10, 170);
+                this.ctx.fillText('cl_smoothing/cl_smooth : When updating avatars information from the server, it can smooth them out.', 10, 210);
+                this.ctx.fillText(' This only applies to other clients when prediction is enabled, and applies to local avatar with no prediction.', 170, 230);
             }
 
             //Draw some information for the host
-            if (avatars_.self.host) {
-                this.ctx_.fillStyle = 'rgba(255,255,255,0.7)';
-                this.ctx_.fillText('You are the host', 10, 465);
+            if (avatars_[0].host) {
+                this.ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                this.ctx.fillText('You are the host', 10, 465);
             }
 
             //Reset the style back to full white.
-            this.ctx_.fillStyle = 'rgba(255,255,255,1)';
+            this.ctx.fillStyle = 'rgba(255,255,255,1)';
         }
 
         ////////////////// informations & debug
@@ -316,12 +338,12 @@ var ClView = (function () {
 
             var _avatarsettings = this.gui.addFolder('Your settings');
 
-            this.colorcontrol = _avatarsettings.addColor(avatars_.self, 'color');
+            this.colorcontrol = _avatarsettings.addColor(avatars_[0], 'color');
 
             //We want to know when we change our color so we can tell
             //the server to tell the other clients for us
             this.colorcontrol.onChange(function (value_) {
-                avatars_.self.color = value_;
+                avatars_[0].color = value_;
                 localStorage.setItem('color', value_);
                 _this2.socket.send('c.' + value_);
             });
@@ -329,9 +351,9 @@ var ClView = (function () {
 
             var _othersettings = this.gui.addFolder('Methods');
             _othersettings.add(sock, 'naive_approach').listen();
-            _othersettings.add(sess, 'client_smoothing').listen();
-            _othersettings.add(sess, 'client_smooth').listen();
-            _othersettings.add(sock, 'client_predict').listen();
+            _othersettings.add(sess, 'cl_smoothing').listen();
+            _othersettings.add(sess, 'cl_smooth').listen();
+            _othersettings.add(sock, 'cl_predict').listen();
 
             var _debugsettings = this.gui.addFolder('Debug view');
             _debugsettings.add(sess, 'show_help').listen();
@@ -356,8 +378,8 @@ var ClView = (function () {
 
             var _netsettings = this.gui.addFolder('Networking');
             _netsettings.add(sock, 'net_offset').min(0.01).step(0.001).listen();
-            _netsettings.add(sock, 'server_time').step(0.001).listen();
-            _netsettings.add(sock, 'client_time').step(0.001).listen();
+            _netsettings.add(sock, 'sv_time').step(0.001).listen();
+            _netsettings.add(sock, 'cl_time').step(0.001).listen();
             _netsettings.add(sock, 'oldest_tick').step(0.001).listen();
 
             _netsettings.open();
@@ -370,17 +392,18 @@ var ClView = (function () {
 ;
 
 var ClSession = (function () {
-    function ClSession(socket_, avatars_, ghosts_) {
+    function ClSession(socket_, avatars_, ghosts_, dests_) {
         _classCallCheck(this, ClSession);
 
         this.socket = socket_;
         this.avatars = avatars_;
         this.ghosts = ghosts_;
+        this.dests = dests_;
 
         this.show_help = false; //Whether or not to draw the help text
 
-        this.client_smoothing = true; //Whether or not the client side prediction tries to smooth things out
-        this.client_smooth = 25; //amount of smoothing to apply to client update dest
+        this.cl_smoothing = true; //Whether or not the client side prediction tries to smooth things out
+        this.cl_smooth = 25; //amount of smoothing to apply to client update dest
 
         this.net_latency = 0.001; //the latency between the client and the server (ping/2)
         this.net_ping = 0.001; //The round trip time from here to the server,and back
@@ -401,12 +424,12 @@ var ClSession = (function () {
     _createClass(ClSession, [{
         key: 'on_ready_session',
         value: function on_ready_session(data_) {
-            var server_time = parseFloat(data_.replace('-', '.'));
+            var sv_time = parseFloat(data_.replace('-', '.'));
 
-            var socket_host = this.avatars.self.host ? this.avatars.self : this.avatars.other;
-            var socket_client = this.avatars.self.host ? this.avatars.other : this.avatars.self;
+            var socket_host = this.avatars[0].host ? this.avatars[0] : this.avatars[1];
+            var socket_client = this.avatars[0].host ? this.avatars[1] : this.avatars[0];
 
-            cm.set_owntime(server_time + this.net_latency);
+            cm.set_owntime(sv_time + this.net_latency);
             console.log('server time is about ' + cm.get_owntime());
 
             //Store their info colors for clarity. server is always blue
@@ -417,19 +440,19 @@ var ClSession = (function () {
             socket_host.state = 'local_pos(hosting)';
             socket_client.state = 'local_pos(joined)';
 
-            this.avatars.self.state = 'YOU ' + this.avatars.self.state;
+            this.avatars[0].state = 'YOU ' + this.avatars[0].state;
 
             //Make sure colors are synced up
-            this.socket.send('c.' + this.avatars.self.color);
+            this.socket.send('c.' + this.avatars[0].color);
         }
     }, {
         key: 'on_join_session',
         value: function on_join_session(data_) {
             //We are not the host
-            this.avatars.self.host = false;
+            this.avatars[0].host = false;
             //Update the local state
-            this.avatars.self.state = 'connected.joined.waiting';
-            this.avatars.self.info_color = '#00bb00';
+            this.avatars[0].state = 'connected.joined.waiting';
+            this.avatars[0].info_color = '#00bb00';
 
             //Make sure the positions match servers and other clients
             this.reset_positions_();
@@ -439,17 +462,17 @@ var ClSession = (function () {
         value: function on_host_session(data_) {
             //The server sends the time when asking us to host, but it should be a new session.
             //so the value will be really small anyway (15 or 16ms)
-            var server_time = parseFloat(data_.replace('-', '.'));
+            var sv_time = parseFloat(data_.replace('-', '.'));
 
             //Get an estimate of the current time on the server
-            cm.set_owntime(server_time + this.net_latency);
+            cm.set_owntime(sv_time + this.net_latency);
 
             //Set the flag that we are hosting, this helps us position respawns correctly
-            this.avatars.self.host = true;
+            this.avatars[0].host = true;
 
             //Update debugging information to display state
-            this.avatars.self.state = 'hosting.waiting for a avatar';
-            this.avatars.self.info_color = '#cc0000';
+            this.avatars[0].state = 'hosting.waiting for a avatar';
+            this.avatars[0].info_color = '#cc0000';
 
             //Make sure we start in the correct place as the host.
             this.reset_positions_();
@@ -457,7 +480,7 @@ var ClSession = (function () {
     }, {
         key: 'on_otherclientcolorchange',
         value: function on_otherclientcolorchange(data_) {
-            this.avatars.other.color = data_;
+            this.avatars[1].color = data_;
         }
     }, {
         key: 'on_ping',
@@ -468,26 +491,26 @@ var ClSession = (function () {
     }, {
         key: 'reset_positions_',
         value: function reset_positions_() {
-            var socket_host = this.avatars.self.host ? this.avatars.self : this.avatars.other;
-            var socket_client = this.avatars.self.host ? this.avatars.other : this.avatars.self;
+            var socket_host = this.avatars[0].host ? this.avatars[0] : this.avatars[1],
+                socket_client = this.avatars[0].host ? this.avatars[1] : this.avatars[0];
 
             //Host always spawns at the top left.
             socket_host.pos = { x: 20, y: 20 };
             socket_client.pos = { x: 500, y: 200 };
 
             //Make sure the local avatar physics is updated
-            this.avatars.self.old_state.pos = cm.new_pos(this.avatars.self.pos);
-            this.avatars.self.pos = cm.new_pos(this.avatars.self.pos);
-            this.avatars.self.cur_state.pos = cm.new_pos(this.avatars.self.pos);
+            this.avatars[0].old_state.pos = cm.new_pos(this.avatars[0].pos);
+            this.avatars[0].pos = cm.new_pos(this.avatars[0].pos);
+            this.avatars[0].cur_state.pos = cm.new_pos(this.avatars[0].pos);
 
             //Position all debug view items to their owners position
-            this.ghosts.sv_pos_self.pos = cm.new_pos(this.avatars.self.pos);
-            this.ghosts.sv_pos_other.pos = cm.new_pos(this.avatars.other.pos);
-            this.ghosts.pos_other.pos = cm.new_pos(this.avatars.other.pos);
+            this.ghosts[0].pos = cm.new_pos(this.avatars[0].pos);
+            this.ghosts[1].pos = cm.new_pos(this.avatars[1].pos);
+            this.dests[1].pos = cm.new_pos(this.avatars[1].pos);
         }
     }, {
         key: 'update',
-        value: function update(t_, server_updates_, client_predict_, naive_approach_, pdt_, client_time_, tx_packet_) {
+        value: function update(t_, sv_updates_, cl_predict_, naive_approach_, pdt_, cl_time_, tx_packet_) {
             //Capture inputs from the avatar
             this.socket.send(tx_packet_);
 
@@ -501,42 +524,42 @@ var ClSession = (function () {
             //Note that if we don't have prediction enabled - this will also
             //update the actual local client position on screen as well.
             if (!naive_approach_) {
-                this.process_net_updates_(server_updates_, client_predict_, naive_approach_, pdt_, client_time_);
+                this.process_net_updates_(sv_updates_, cl_predict_, naive_approach_, pdt_, cl_time_);
             }
 
             //When we are doing client side prediction, we smooth out our position
             //across frames using local input states we have stored.
-            this.update_local_position(client_predict_, pdt_);
+            this.update_local_position(cl_predict_, pdt_);
 
             //Work out the fps average
             this.refresh_fps_();
         }
     }, {
         key: 'process_net_updates_',
-        value: function process_net_updates_(server_updates_, client_predict_, naive_approach_, pdt_, client_time_) {
+        value: function process_net_updates_(sv_updates_, cl_predict_, naive_approach_, pdt_, cl_time_) {
             //No updates...
-            if (!server_updates_.length) {
+            if (!sv_updates_.length) {
                 return;
             }
 
             //First : Find the position in the updates, on the timeline
             //We call this current_time, then we find the past_pos and the target_pos using this,
-            //searching throught the server_updates array for current_time in between 2 other times.
+            //searching throught the sv_updates array for current_time in between 2 other times.
             // Then :  other avatar position = lerp ( past_pos, target_pos, current_time );
 
             //Find the position in the timeline of updates we stored.
-            var current_time = client_time_;
-            var count = server_updates_.length - 1;
-            var target = null;
-            var previous = null;
+            var current_time = cl_time_,
+                count = sv_updates_.length - 1,
+                target = null,
+                previous = null;
 
             //We look from the 'oldest' updates, since the newest ones
             //are at the end (list.length-1 for example). This will be expensive
             //only when our time is not found on the timeline, since it will run all
             //samples. Usually this iterates very little before breaking out with a target.
             for (var i = 0; i < count; ++i) {
-                var point = server_updates_[i];
-                var next_point = server_updates_[i + 1];
+                var point = sv_updates_[i],
+                    next_point = sv_updates_[i + 1];
 
                 //Compare our point in time with the server times we have
                 if (current_time > point.t && current_time < next_point.t) {
@@ -549,8 +572,8 @@ var ClSession = (function () {
             //With no target we store the last known
             //server position and move to that instead
             if (!target) {
-                target = server_updates_[0];
-                previous = server_updates_[0];
+                target = sv_updates_[0];
+                previous = sv_updates_[0];
             }
 
             //Now that we have a target and a previous destination,
@@ -575,70 +598,91 @@ var ClSession = (function () {
             }
 
             //The most recent server update
-            var latest_server_data = server_updates_[server_updates_.length - 1];
+            var latest_sv_data = sv_updates_[sv_updates_.length - 1];
 
-            //These are the exact server positions from this tick, but only for the ghost
-            var other_sv_pos = this.avatars.self.host ? latest_server_data.cp : latest_server_data.hp;
-
-            //The other avatars positions in this timeline, behind us and in front of us
-            var other_target_pos = this.avatars.self.host ? target.cp : target.hp;
-            var other_past_pos = this.avatars.self.host ? previous.cp : previous.hp;
+            var other_sv_pos = undefined,
+                other_sv_target_pos = undefined,
+                other_target_pos = undefined,
+                other_past_pos = undefined;
+            if (this.avatars[0].host) {
+                //These are the exact server positions from this tick, but only for the ghost
+                other_sv_pos = latest_sv_data.pos[1];
+                //The other avatars positions in this timeline, behind us and in front of us
+                other_target_pos = target.pos[1];
+                other_past_pos = previous.pos[1];
+            } else {
+                //These are the exact server positions from this tick, but only for the ghost
+                other_sv_pos = latest_sv_data.pos[0];
+                //The other avatars positions in this timeline, behind us and in front of us
+                other_target_pos = target.pos[0];
+                other_past_pos = previous.pos[0];
+            }
 
             //update the dest block, this is a simple lerp
-            //to the target from the previous point in the server_updates buffer
-            this.ghosts.sv_pos_other.pos = cm.new_pos(other_sv_pos);
-            this.ghosts.pos_other.pos = cm.v_lerp(other_past_pos, other_target_pos, time_point);
+            //to the target from the previous point in the sv_updates buffer
+            this.ghosts[1].pos = cm.new_pos(other_sv_pos);
+            this.dests[1].pos = cm.v_lerp(other_past_pos, other_target_pos, time_point);
 
-            this.avatars.other.pos = this.update_pos_(this.avatars.other, this.ghosts.pos_other.pos, pdt_);
+            this.avatars[1].pos = this.update_pos_(this.avatars[1], this.dests[1].pos, pdt_);
 
             //Now, if not predicting client movement , we will maintain the local avatar position
             //using the same method, smoothing the avatars information from the past.
-            if (!client_predict_ && !naive_approach_) {
-                //These are the exact server positions from this tick, but only for the ghost
-                var my_sv_pos = this.avatars.self.host ? latest_server_data.hp : latest_server_data.cp;
-
-                //The other avatars positions in this timeline, behind us and in front of us
-                var my_target_pos = this.avatars.self.host ? target.hp : target.cp;
-                var my_past_pos = this.avatars.self.host ? previous.hp : previous.cp;
+            if (!cl_predict_ && !naive_approach_) {
+                var my_sv_pos = undefined,
+                    my_target_pos = undefined,
+                    my_past_pos = undefined;
+                if (this.avatars[0].host) {
+                    //These are the exact server positions from this tick, but only for the ghost
+                    my_sv_pos = latest_sv_data.pos[0];
+                    //The other avatars positions in this timeline, behind us and in front of us
+                    my_target_pos = target.pos[0];
+                    my_past_pos = previous.pos[0];
+                } else {
+                    //These are the exact server positions from this tick, but only for the ghost
+                    my_sv_pos = latest_sv_data.pos[1];
+                    //The other avatars positions in this timeline, behind us and in front of us
+                    my_target_pos = target.pos[1];
+                    my_past_pos = previous.pos[1];
+                }
 
                 //Snap the ghost to the new server position
-                this.ghosts.sv_pos_self.pos = cm.new_pos(my_sv_pos);
+                this.ghosts[0].pos = cm.new_pos(my_sv_pos);
                 var local_target = cm.v_lerp(my_past_pos, my_target_pos, time_point);
 
                 // Smoothly follow the destination position
-                this.avatars.self.pos = this.update_pos_(this.avatars.self, local_target, pdt_);
+                this.avatars[0].pos = this.update_pos_(this.avatars[0], local_target, pdt_);
             }
         }
     }, {
         key: 'update_pos_',
         value: function update_pos_(item_, target_pos_, pdt_) {
-            if (this.client_smoothing) {
-                return cm.v_lerp(item_.pos, target_pos_, pdt_ * this.client_smooth);
+            if (this.cl_smoothing) {
+                return cm.v_lerp(item_.pos, target_pos_, pdt_ * this.cl_smooth);
             }
             return cm.new_pos(target_pos_);
         }
     }, {
         key: 'update_local_position',
-        value: function update_local_position(client_predict_, pdt_) {
-            if (!client_predict_) {
+        value: function update_local_position(cl_predict_, pdt_) {
+            if (!cl_predict_) {
                 return;
             }
 
             //Work out the time we have since we updated the state
-            var t = (cm.get_owntime() - this.avatars.self.state_time) / pdt_;
+            var t = (cm.get_owntime() - this.avatars[0].state_time) / pdt_;
 
             //Then store the states for clarity,
-            var old_state = this.avatars.self.old_state.pos;
-            var current_state = this.avatars.self.cur_state.pos;
+            var old_state = this.avatars[0].old_state.pos;
+            var current_state = this.avatars[0].cur_state.pos;
 
             //Make sure the visual position matches the states we have stored
-            // this.avatars.self.pos = cm.v_add(old_state,
+            // this.avatars[0].pos = cm.v_add(old_state,
             //                                  cm.v_mul_scalar(cm.v_sub(current_state,
             //                                                           old_state), t ));
-            this.avatars.self.pos = current_state;
+            this.avatars[0].pos = current_state;
 
             //We handle collision on client if predicting.
-            cm.check_collision(this.avatars.self);
+            cm.check_collision(this.avatars[0]);
         }
     }, {
         key: 'refresh_fps_',
@@ -685,7 +729,7 @@ var ClPresenter = (function () {
 
             //Create the default configuration settings
             this.naive_approach = false; //Whether or not to use the naive approach
-            this.client_predict = true; //Whether or not the client is predicting input
+            this.cl_predict = true; //Whether or not the client is predicting input
             this.show_sv_pos = false; //Whether or not to show the server position
             this.show_dest_pos = false; //Whether or not to show the interpolation goal
 
@@ -696,8 +740,8 @@ var ClPresenter = (function () {
             this.net_offset = 100; //100 ms latency between server and client interpolation for other clients
             this.buffer_size = 2; //The size of the server history to keep for rewinding/interpolating.
             this.oldest_tick = 0.01; //the last time tick we have available in the buffer
-            this.client_time = 0.01; //Our local 'clock' based on server time - client interpolation(net_offset).
-            this.server_time = 0.01; //The time the server reported it was at, last we heard from it
+            this.cl_time = 0.01; //Our local 'clock' based on server time - client interpolation(net_offset).
+            this.sv_time = 0.01; //The time the server reported it was at, last we heard from it
 
             this.pdt = 0.0001; // for smoothing (check ClSession)
 
@@ -711,9 +755,10 @@ var ClPresenter = (function () {
         value: function start_(models_) {
             this.avatars = models_[0];
             this.ghosts = models_[1];
+            this.dests = models_[2];
             //A list of recent server updates we interpolate across
             //This is the buffer that is the driving factor for our networking
-            this.server_updates = [];
+            this.sv_updates = [];
 
             //Connect to the socket.io server!
             this.connect_to_server_();
@@ -724,7 +769,7 @@ var ClPresenter = (function () {
             //Set their colors from the storage or locally
             this.color = localStorage.getItem('color') || '#cc8822';
             localStorage.setItem('color', this.color);
-            this.avatars.self.color = this.color;
+            this.avatars[0].color = this.color;
 
             //Make this only if requested
             if (String(window.location).indexOf('debug') != -1) {
@@ -744,7 +789,7 @@ var ClPresenter = (function () {
             this.input_seq += 1; //Update what sequence we are on now
 
             //Store the input state as a snapshot of what happened.
-            this.avatars.self.inputs.push({ inputs: input_q,
+            this.avatars[0].inputs.push({ inputs: input_q,
                 time: cm.get_owntime().fixed(3),
                 seq: this.input_seq });
 
@@ -753,12 +798,12 @@ var ClPresenter = (function () {
                 //Send the packet of information to the server.
                 //The input packets are labelled with an 'i' in front.
                 var tx_packet = 'i.' + input_q.join('-') + '.' + cm.get_owntime().toFixed(3).replace('.', '-') + '.' + this.input_seq;
-                this.session.update(t_, this.server_updates, this.client_predict, this.naive_approach, this.pdt, this.client_time, tx_packet);
+                this.session.update(t_, this.sv_updates, this.cl_predict, this.naive_approach, this.pdt, this.cl_time, tx_packet);
             }
 
             // drawing job
             this.view.draw(this.avatars);
-            this.view.draw_debug(this.avatars, this.ghosts, this.naive_approach, this.show_dest_pos, this.show_sv_pos);
+            this.view.draw_debug(this.avatars, this.ghosts, this.dests, this.naive_approach, this.show_dest_pos, this.show_sv_pos);
 
             //schedule the next update
             this.updateid = window.requestAnimationFrame(this.update_.bind(this), this.viewport_);
@@ -777,21 +822,20 @@ var ClPresenter = (function () {
 
             req.addEventListener('loadend', function () {
                 if (req.status === 200) {
-                    var models = [{ self: _this3.gen_model_(req.response),
-                        other: _this3.gen_model_(req.response) }, { sv_pos_self: _this3.gen_model_(req.response), //Our ghost position on the server
-                        sv_pos_other: _this3.gen_model_(req.response), //The other avatars server position as we receive it
-                        pos_other: _this3.gen_model_(req.response) }]; //The other avatars ghost destination position (the lerp)]
-                    models[1].sv_pos_self.state = 'sv_pos';
-                    models[1].sv_pos_self.info_color = 'rgba(255,255,255,0.2)';
-                    models[1].sv_pos_self.pos = { x: 20, y: 20 };
+                    var models = [[_this3.gen_model_(req.response), _this3.gen_model_(req.response)], // avatar
+                    [_this3.gen_model_(req.response), _this3.gen_model_(req.response)], // ghost[0] = You
+                    [_this3.gen_model_(req.response), _this3.gen_model_(req.response)]]; // dests[1] = The other avatars ghost destination position (the lerp)
+                    models[1][0].state = 'sv_pos';
+                    models[1][0].info_color = 'rgba(255,255,255,0.2)';
+                    models[1][0].pos = { x: 20, y: 20 };
 
-                    models[1].sv_pos_other.state = 'sv_pos';
-                    models[1].sv_pos_other.info_color = 'rgba(255,255,255,0.2)';
-                    models[1].sv_pos_other.pos = { x: 500, y: 200 };
+                    models[1][1].state = 'sv_pos';
+                    models[1][1].info_color = 'rgba(255,255,255,0.2)';
+                    models[1][1].pos = { x: 500, y: 200 };
 
-                    models[1].pos_other.state = 'dest_pos';
-                    models[1].pos_other.info_color = 'rgba(255,255,255,0.1)';
-                    models[1].pos_other.pos = { x: 500, y: 200 };
+                    models[2][1].state = 'dest_pos';
+                    models[2][1].info_color = 'rgba(255,255,255,0.1)';
+                    models[2][1].pos = { x: 500, y: 200 };
 
                     _this3.start_(models);
                 } else {
@@ -815,23 +859,29 @@ var ClPresenter = (function () {
         key: 'process_net_prediction_correction_',
         value: function process_net_prediction_correction_() {
             //No updates...
-            if (!this.server_updates.length) {
+            if (!this.sv_updates.length) {
                 return;
             }
 
             //The most recent server update
-            var latest_server_data = this.server_updates[this.server_updates.length - 1];
+            var latest_sv_data = this.sv_updates[this.sv_updates.length - 1];
 
             //Our latest server position
-            var my_sv_pos = this.avatars.self.host ? latest_server_data.hp : latest_server_data.cp;
 
-            //Update the debug server position block
-            this.ghosts.sv_pos_self.pos = cm.new_pos(my_sv_pos);
+            var my_sv_pos = undefined,
+                my_last_input_on_server = undefined;
+            if (this.avatars[0].host) {
+                my_sv_pos = latest_sv_data.pos[0];
+                my_last_input_on_server = latest_sv_data.pos[0];
+            } else {
+                my_sv_pos = latest_sv_data.pos[1];
+                my_last_input_on_server = latest_sv_data.pos[1];
+            }
 
+            //Update the debug server position block (own ghost)
+            this.ghosts[0].pos = cm.new_pos(my_sv_pos);
             //here we handle our local input prediction ,
             //by correcting it with the server and reconciling its differences
-
-            var my_last_input_on_server = this.avatars.self.host ? latest_server_data.his : latest_server_data.cis;
             if (!my_last_input_on_server) {
                 return;
             }
@@ -839,8 +889,8 @@ var ClPresenter = (function () {
             //The last input sequence index in my local input list
             var lastinputseq_index = -1;
             //Find this input in the list, and store the index
-            for (var i = 0; i < this.avatars.self.inputs.length; ++i) {
-                if (this.avatars.self.inputs[i].seq == my_last_input_on_server) {
+            for (var i = 0; i < this.avatars[0].inputs.length; ++i) {
+                if (this.avatars[0].inputs[i].seq == my_last_input_on_server) {
                     lastinputseq_index = i;break;
                 }
             }
@@ -855,16 +905,16 @@ var ClPresenter = (function () {
 
             //remove the rest of the inputs we have confirmed on the server
             var number_to_clear = Math.abs(lastinputseq_index - -1);
-            this.avatars.self.inputs.splice(0, number_to_clear);
+            this.avatars[0].inputs.splice(0, number_to_clear);
             //The avatar is now located at the new server position, authoritive server
-            this.avatars.self.cur_state.pos = cm.new_pos(my_sv_pos);
-            this.avatars.self.last_input_seq = lastinputseq_index;
+            this.avatars[0].cur_state.pos = cm.new_pos(my_sv_pos);
+            this.avatars[0].last_input_seq = lastinputseq_index;
 
             //Now we reapply all the inputs that we have locally that
             //the server hasn't yet confirmed. This will 'keep' our position the same,
             //but also confirm the server position at the same time.
             this.update_physics(this.pdt);
-            this.session.update_local_position(this.client_predict, this.pdt);
+            this.session.update_local_position(this.cl_predict, this.pdt);
         }
     }, {
         key: 'update_physics',
@@ -873,13 +923,13 @@ var ClPresenter = (function () {
             //Fetch the new direction from the input buffer,
             //and apply it to the state so we can smooth it in the visual state
 
-            if (!this.client_predict) {
+            if (!this.cl_predict) {
                 return;
             }
 
-            this.avatars.self.old_state.pos = cm.new_pos(this.avatars.self.cur_state.pos);
-            this.avatars.self.cur_state.pos = cm.v_add(this.avatars.self.old_state.pos, cm.process_input(this.avatars.self));
-            this.avatars.self.state_time = cm.get_owntime();
+            this.avatars[0].old_state.pos = cm.new_pos(this.avatars[0].cur_state.pos);
+            this.avatars[0].cur_state.pos = cm.v_add(this.avatars[0].old_state.pos, cm.process_input(this.avatars[0]));
+            this.avatars[0].state_time = cm.get_owntime();
         }
     }, {
         key: 'create_ping_timer_',
@@ -900,12 +950,12 @@ var ClPresenter = (function () {
         value: function on_disconnect_(data_) {
             //When we disconnect, we don't know if the other avatar is
             //connected or not, and since we aren't, everything goes to offline
-            this.avatars.self.info_color = 'rgba(255,255,255,0.1)';
-            this.avatars.self.state = 'not-connected';
-            this.avatars.self.online = false;
+            this.avatars[0].info_color = 'rgba(255,255,255,0.1)';
+            this.avatars[0].state = 'not-connected';
+            this.avatars[0].online = false;
 
-            this.avatars.other.info_color = 'rgba(255,255,255,0.1)';
-            this.avatars.other.state = 'not-connected';
+            this.avatars[1].info_color = 'rgba(255,255,255,0.1)';
+            this.avatars[1].state = 'not-connected';
         }
     }, {
         key: 'on_serverupdate_recieved_',
@@ -913,14 +963,14 @@ var ClPresenter = (function () {
             //Lets clarify the information we have locally. One of the avatars is 'hosting' and
             //the other is a joined in client, so we name these host and client for making sure
             //the positions we get from the server are mapped onto the correct local sprites
-            var socket_host = this.avatars.self.host ? this.avatars.self : this.avatars.other;
-            var socket_client = this.avatars.self.host ? this.avatars.other : this.avatars.self;
-            var this_avatar = this.avatars.self;
+            var socket_host = this.avatars[0].host ? this.avatars[0] : this.avatars[1];
+            var socket_client = this.avatars[0].host ? this.avatars[1] : this.avatars[0];
+            var this_avatar = this.avatars[0];
 
             //Store the server time (this is offset by the latency in the network, by the time we get it)
-            this.server_time = data_.t;
+            this.sv_time = data_.t;
             //Update our local offset time from the last server update
-            this.client_time = this.server_time - this.net_offset / 1000;
+            this.cl_time = this.sv_time - this.net_offset / 1000;
 
             //One approach is to set the position directly as the server tells you.
             //This is a common mistake and causes somewhat playable results on a local LAN, for example,
@@ -928,11 +978,11 @@ var ClPresenter = (function () {
             //information to interpolate with so it misses positions, and packet loss destroys this approach
             //even more so. See 'the bouncing ball problem' on Wikipedia.
             if (this.naive_approach) {
-                if (data_.hp) {
-                    socket_host.pos = cm.new_pos(data_.hp);
+                if (data_.pos[0]) {
+                    socket_host.pos = cm.new_pos(data_.pos[0]);
                 }
-                if (data_.cp) {
-                    socket_client.pos = cm.new_pos(data_.cp);
+                if (data_.pos[1]) {
+                    socket_client.pos = cm.new_pos(data_.pos[1]);
                 }
                 return;
             }
@@ -941,19 +991,19 @@ var ClPresenter = (function () {
             //and then play the timeline
             //back to the avatar with a small delay (net_offset), allowing
             //interpolation between the points.
-            this.server_updates.push(data_);
+            this.sv_updates.push(data_);
 
             //we limit the buffer in seconds worth of updates
             //60fps*buffer seconds = number of samples
-            if (this.server_updates.length >= 60 * this.buffer_size) {
-                this.server_updates.splice(0, 1);
+            if (this.sv_updates.length >= 60 * this.buffer_size) {
+                this.sv_updates.splice(0, 1);
             }
 
             //We can see when the last tick we know of happened.
-            //If client_time gets behind this due to latency, a snap occurs
+            //If cl_time gets behind this due to latency, a snap occurs
             //to the last tick. Unavoidable, and a reallly bad connection here.
             //If that happens it might be best to drop the session after a period of time.
-            this.oldest_tick = this.server_updates[0].t;
+            this.oldest_tick = this.sv_updates[0].t;
 
             //Handle the latest positions from the server
             //and make sure to correct our local predictions, making the server have final say.
@@ -965,10 +1015,10 @@ var ClPresenter = (function () {
             //The server responded that we are now in a session,
             //this lets us store the information about ourselves and set the colors
             //to show we are now ready to be playing.
-            this.avatars.self.id = data_.id;
-            this.avatars.self.info_color = '#cc0000';
-            this.avatars.self.state = 'connected';
-            this.avatars.self.online = true;
+            this.avatars[0].id = data_.id;
+            this.avatars[0].info_color = '#cc0000';
+            this.avatars[0].state = 'connected';
+            this.avatars[0].online = true;
         }
     }, {
         key: 'on_netmessage_',
@@ -1015,10 +1065,10 @@ var ClPresenter = (function () {
             //When we connect, we are not 'connected' until we have a server id
             //and are placed in a session by the server. The server sends us a message for that.
             this.socket.on('connect', function () {
-                _this5.avatars.self.state = 'connecting';
+                _this5.avatars[0].state = 'connecting';
             });
 
-            this.session = new ClSession(this.socket, this.avatars, this.ghosts);
+            this.session = new ClSession(this.socket, this.avatars, this.ghosts, this.dests);
 
             //Sent when we are disconnected (network, server down, etc)
             this.socket.on('disconnect', this.on_disconnect_.bind(this));

@@ -10,6 +10,7 @@ class Avatar
     {
         //Store the instance, if any
         this.socket = socket_;
+        // this.userid = socket_.userid;
 
         //Set up initial values for our state information
         this.pos = { x: 0, y: 0 };

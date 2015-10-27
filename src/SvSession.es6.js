@@ -1,16 +1,16 @@
 class SvSession
 {
-    constructor(socket_)
+    constructor(socket_, cl_id_)
     {
         let UUID = require('node-uuid');
-
         this.id = UUID(); // generate a new id for the session
+
         this.socket_host =  socket_; // so we know who initiated the session
         this.socket_client =  null; // nobody else joined yet, since its new
         this.avatar_count =  1;
 
         this.frame_time_ = 45; //on server we run at 45ms, 22hz
-        this.server_time = 0;
+        this.sv_time = 0;
         this.last_time = 0;
         this.laststate = {};
 
@@ -20,10 +20,15 @@ class SvSession
 
         //We create a avatar set, passing them
         //the session that is running them, as well
-        this.avatars = { self: new Avatar(this.socket_host),
-                         other: new Avatar(this.socket_client) };
-        this.avatars.self.pos = { x: 20, y: 20 };
+        this.avatars = [new Avatar(this.socket_host), new Avatar(this.socket_client)];
+
+        this.avatars[0].pos = { x: 20, y: 20 };
         cm.start_physics_loop(this);
+
+        // initialize host
+        //tell the avatar that they are now the host
+        //s=server message, h=you are hosting
+        this.socket_host.send('s.h.' + String(cm.get_owntime()).replace('.', '-'));
     }
 
     //Main update loop
@@ -31,19 +36,14 @@ class SvSession
     {
         //Update the session specifics
         //Update the state of our local clock to match the timer
-        this.server_time = cm.get_owntime();
+        this.sv_time = cm.get_owntime();
 
-        //Make a snapshot of the current state, for updating the clients
-        this.laststate = { hp: this.avatars.self.pos, //'host position', the session creators position
-                           cp: this.avatars.other.pos, //'client position', the person that joined, their position
-                           his: this.avatars.self.last_input_seq, //'host input sequence', the last input we processed for the host
-                           cis: this.avatars.other.last_input_seq, //'client input sequence', the last input we processed for the client
-                           t: this.server_time }; // our current local time on the server
+        this.laststate = { pos: this.avatars.map((a_) => { return a_.pos; }),
+                           inp_seq: this.avatars.map((a_) => { return a_.last_input_seq; }),
+                           t: this.sv_time }; // our current local time on the server
 
-        //Send the snapshot to the 'host' avatar
-        if (this.avatars.self.socket) { this.avatars.self.socket.emit('onserverupdate', this.laststate); }
-        //Send the snapshot to the 'client' avatar
-        if (this.avatars.other.socket) { this.avatars.other.socket.emit('onserverupdate', this.laststate); }
+        for (let avatar of this.avatars)
+        { if (avatar.socket) { avatar.socket.emit('onserverupdate', this.laststate); } }
 
         let currTime = Date.now(),
             timeToCall = Math.max(0, this.frame_time_ - (currTime - this.last_time));
@@ -80,7 +80,6 @@ class SvSession
                     //tell the client the session is ended
                     this.socket_host.send('s.e');
                     //i am no longer hosting, this session is going down
-                    this.socket_host.hosting = false;
                     //now look for/create a new session.
                     return this.socket_host;
                 }
@@ -89,15 +88,15 @@ class SvSession
         return null;
     }
 
-    try_to_start(socket_)
+    try_to_start(cl_socket_, cl_id_)
     {
         //If the session is a avatar short
         if (this.avatar_count >= 2) { return false; } //if more than 2 avatars
 
         //increase the avatar count and store
         //the avatar as the client of this session
-        this.socket_client = socket_;
-        this.avatars.other.socket = socket_;
+        this.socket_client = cl_socket_;
+        this.avatars[1].socket = cl_socket_;
         this.avatar_count++;
 
         //start running the session on the server,
@@ -124,29 +123,26 @@ class SvSession
     //Updated at 15ms , simulates the world state
     update_physics(pdt_)
     {
-        //Handle avatar one
-        this.avatars.self.old_state.pos = cm.new_pos(this.avatars.self.pos);
-        this.avatars.self.pos = cm.v_add(this.avatars.self.old_state.pos,
-                                         cm.process_input(this.avatars.self));
-
-        //Handle avatar two
-        this.avatars.other.old_state.pos = cm.new_pos(this.avatars.other.pos);
-        this.avatars.other.pos = cm.v_add(this.avatars.other.old_state.pos,
-                                          cm.process_input(this.avatars.other));
+        //Handle avatars
+        for (let avatar of this.avatars)
+        {
+            avatar.old_state.pos = cm.new_pos(avatar.pos);
+            avatar.pos = cm.v_add(avatar.old_state.pos, cm.process_input(avatar));
+        }
 
         //Keep the physics position in the world
-        cm.check_collision(this.avatars.self);
-        cm.check_collision(this.avatars.other);
-
-        this.avatars.self.inputs = []; //we have cleared the input buffer, so remove this
-        this.avatars.other.inputs = []; //we have cleared the input buffer, so remove this
+        for (let avatar of this.avatars)
+        {
+            cm.check_collision(avatar);
+            avatar.inputs = [];
+        }
     }
 
-    handle_input(client_, input_, input_time_, input_seq_)
+    handle_input(cl_, input_, input_time_, input_seq_)
     {
         //Fetch which client this refers to out of the two
-        let socket_client = client_.userid == this.avatars.self.socket.userid ? this.avatars.self : this.avatars.other;
+        let input_socket = cl_.userid == this.socket_host.userid ? this.avatars[0] : this.avatars[1];
         //Store the input on the avatar instance for processing in the physics loop
-        socket_client.inputs.push({ inputs: input_, time: input_time_, seq: input_seq_ });
+        input_socket.inputs.push({ inputs: input_, time: input_time_, seq: input_seq_ });
     }
 }

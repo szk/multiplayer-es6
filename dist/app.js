@@ -201,6 +201,7 @@ var Avatar = function Avatar(socket_) {
 
     //Store the instance, if any
     this.socket = socket_;
+    // this.userid = socket_.userid;
 
     //Set up initial values for our state information
     this.pos = { x: 0, y: 0 };
@@ -253,18 +254,18 @@ var SvModel = (function () {
 ;
 
 var SvSession = (function () {
-    function SvSession(socket_) {
+    function SvSession(socket_, cl_id_) {
         _classCallCheck(this, SvSession);
 
         var UUID = require('node-uuid');
-
         this.id = UUID(); // generate a new id for the session
+
         this.socket_host = socket_; // so we know who initiated the session
         this.socket_client = null; // nobody else joined yet, since its new
         this.avatar_count = 1;
 
         this.frame_time_ = 45; //on server we run at 45ms, 22hz
-        this.server_time = 0;
+        this.sv_time = 0;
         this.last_time = 0;
         this.laststate = {};
 
@@ -274,10 +275,15 @@ var SvSession = (function () {
 
         //We create a avatar set, passing them
         //the session that is running them, as well
-        this.avatars = { self: new Avatar(this.socket_host),
-            other: new Avatar(this.socket_client) };
-        this.avatars.self.pos = { x: 20, y: 20 };
+        this.avatars = [new Avatar(this.socket_host), new Avatar(this.socket_client)];
+
+        this.avatars[0].pos = { x: 20, y: 20 };
         cm.start_physics_loop(this);
+
+        // initialize host
+        //tell the avatar that they are now the host
+        //s=server message, h=you are hosting
+        this.socket_host.send('s.h.' + String(cm.get_owntime()).replace('.', '-'));
     }
 
     //Main update loop
@@ -289,22 +295,40 @@ var SvSession = (function () {
 
             //Update the session specifics
             //Update the state of our local clock to match the timer
-            this.server_time = cm.get_owntime();
+            this.sv_time = cm.get_owntime();
 
-            //Make a snapshot of the current state, for updating the clients
-            this.laststate = { hp: this.avatars.self.pos, //'host position', the session creators position
-                cp: this.avatars.other.pos, //'client position', the person that joined, their position
-                his: this.avatars.self.last_input_seq, //'host input sequence', the last input we processed for the host
-                cis: this.avatars.other.last_input_seq, //'client input sequence', the last input we processed for the client
-                t: this.server_time }; // our current local time on the server
+            this.laststate = { pos: this.avatars.map(function (a_) {
+                    return a_.pos;
+                }),
+                inp_seq: this.avatars.map(function (a_) {
+                    return a_.last_input_seq;
+                }),
+                t: this.sv_time }; // our current local time on the server
 
-            //Send the snapshot to the 'host' avatar
-            if (this.avatars.self.socket) {
-                this.avatars.self.socket.emit('onserverupdate', this.laststate);
-            }
-            //Send the snapshot to the 'client' avatar
-            if (this.avatars.other.socket) {
-                this.avatars.other.socket.emit('onserverupdate', this.laststate);
+            var _iteratorNormalCompletion = true;
+            var _didIteratorError = false;
+            var _iteratorError = undefined;
+
+            try {
+                for (var _iterator = this.avatars[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+                    var avatar = _step.value;
+                    if (avatar.socket) {
+                        avatar.socket.emit('onserverupdate', this.laststate);
+                    }
+                }
+            } catch (err) {
+                _didIteratorError = true;
+                _iteratorError = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion && _iterator['return']) {
+                        _iterator['return']();
+                    }
+                } finally {
+                    if (_didIteratorError) {
+                        throw _iteratorError;
+                    }
+                }
             }
 
             var currTime = Date.now(),
@@ -338,7 +362,6 @@ var SvSession = (function () {
                         //tell the client the session is ended
                         this.socket_host.send('s.e');
                         //i am no longer hosting, this session is going down
-                        this.socket_host.hosting = false;
                         //now look for/create a new session.
                         return this.socket_host;
                     }
@@ -348,7 +371,7 @@ var SvSession = (function () {
         }
     }, {
         key: 'try_to_start',
-        value: function try_to_start(socket_) {
+        value: function try_to_start(cl_socket_, cl_id_) {
             //If the session is a avatar short
             if (this.avatar_count >= 2) {
                 return false;
@@ -356,8 +379,8 @@ var SvSession = (function () {
 
             //increase the avatar count and store
             //the avatar as the client of this session
-            this.socket_client = socket_;
-            this.avatars.other.socket = socket_;
+            this.socket_client = cl_socket_;
+            this.avatars[1].socket = cl_socket_;
             this.avatar_count++;
 
             //start running the session on the server,
@@ -385,28 +408,68 @@ var SvSession = (function () {
     }, {
         key: 'update_physics',
         value: function update_physics(pdt_) {
-            //Handle avatar one
-            this.avatars.self.old_state.pos = cm.new_pos(this.avatars.self.pos);
-            this.avatars.self.pos = cm.v_add(this.avatars.self.old_state.pos, cm.process_input(this.avatars.self));
+            //Handle avatars
+            var _iteratorNormalCompletion2 = true;
+            var _didIteratorError2 = false;
+            var _iteratorError2 = undefined;
 
-            //Handle avatar two
-            this.avatars.other.old_state.pos = cm.new_pos(this.avatars.other.pos);
-            this.avatars.other.pos = cm.v_add(this.avatars.other.old_state.pos, cm.process_input(this.avatars.other));
+            try {
+                for (var _iterator2 = this.avatars[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+                    var avatar = _step2.value;
 
-            //Keep the physics position in the world
-            cm.check_collision(this.avatars.self);
-            cm.check_collision(this.avatars.other);
+                    avatar.old_state.pos = cm.new_pos(avatar.pos);
+                    avatar.pos = cm.v_add(avatar.old_state.pos, cm.process_input(avatar));
+                }
 
-            this.avatars.self.inputs = []; //we have cleared the input buffer, so remove this
-            this.avatars.other.inputs = []; //we have cleared the input buffer, so remove this
+                //Keep the physics position in the world
+            } catch (err) {
+                _didIteratorError2 = true;
+                _iteratorError2 = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion2 && _iterator2['return']) {
+                        _iterator2['return']();
+                    }
+                } finally {
+                    if (_didIteratorError2) {
+                        throw _iteratorError2;
+                    }
+                }
+            }
+
+            var _iteratorNormalCompletion3 = true;
+            var _didIteratorError3 = false;
+            var _iteratorError3 = undefined;
+
+            try {
+                for (var _iterator3 = this.avatars[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+                    var avatar = _step3.value;
+
+                    cm.check_collision(avatar);
+                    avatar.inputs = [];
+                }
+            } catch (err) {
+                _didIteratorError3 = true;
+                _iteratorError3 = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion3 && _iterator3['return']) {
+                        _iterator3['return']();
+                    }
+                } finally {
+                    if (_didIteratorError3) {
+                        throw _iteratorError3;
+                    }
+                }
+            }
         }
     }, {
         key: 'handle_input',
-        value: function handle_input(client_, input_, input_time_, input_seq_) {
+        value: function handle_input(cl_, input_, input_time_, input_seq_) {
             //Fetch which client this refers to out of the two
-            var socket_client = client_.userid == this.avatars.self.socket.userid ? this.avatars.self : this.avatars.other;
+            var input_socket = cl_.userid == this.socket_host.userid ? this.avatars[0] : this.avatars[1];
             //Store the input on the avatar instance for processing in the physics loop
-            socket_client.inputs.push({ inputs: input_, time: input_time_, seq: input_seq_ });
+            input_socket.inputs.push({ inputs: input_, time: input_time_, seq: input_seq_ });
         }
     }]);
 
@@ -499,9 +562,7 @@ var SvPresenter = (function () {
                     if (err_) {
                         console.log(err_);
                         res_.status(err_.status).end();
-                    } else {
-                        console.log('Sent:', file);
-                    }
+                    } else {/* console.log('Sent:', file); */}
                 });
             });
         }
@@ -516,8 +577,9 @@ var SvPresenter = (function () {
             //This way, when the client requests '/socket.io/' files, socket.io determines what the client needs.
 
             //Create a socket.io instance using our express server
-            var io = require('socket.io');
-            var sio = io.listen(this.httpd);
+            var io = require('socket.io'),
+                UUID = require('node-uuid'),
+                sio = io.listen(this.httpd);
 
             //Configure the socket.io connection settings.
             //See http://socket.io/
@@ -533,28 +595,20 @@ var SvPresenter = (function () {
             //So we can send that client looking for a session to play,
             //as well as give that client a unique ID to use so we can
             //maintain the list if avatars.
-            var UUID = require('node-uuid');
             sio.sockets.on('connection', function (socket_) {
-                //Generate a new UUID, looks something like
-                //5b2ca132-64bd-4513-99da-90e838ca47d1
-                //and store this on their socket/connection
-                socket_.userid = UUID();
-
-                //tell the avatar they connected, giving them their id
-                socket_.emit('onconnected', { id: socket_.userid });
-
+                var cl_id = UUID();
                 //now we can find them a session to play with someone.
                 //if no session exists with someone waiting, they create one and wait.
-                _this4.find_session_(socket_);
+                var accepted_session = _this4.find_session_(socket_, cl_id);
 
                 //Useful to know when someone connects
-                console.log('\t socket.io:: socket ' + socket_.userid + ' connected');
+                console.log('\t avatar: ' + accepted_session.id + ' connected');
 
                 //// register events
                 //Now we want to handle some of the messages that clients will send.
                 //They send messages here, and we send them to the sv to handle.
-                socket_.on('message', function (m_) {
-                    _this4.on_recv_message_(socket_, m_);
+                socket_.on('message', function (msg_) {
+                    _this4.on_recv_message_(socket_, cl_id, msg_);
                 });
 
                 //When this client disconnects, we want to tell the session server
@@ -562,12 +616,12 @@ var SvPresenter = (function () {
                 //in, and make sure the other avatar knows that they left and so on.
                 socket_.on('disconnect', function () {
                     //Useful to know when soomeone disconnects
-                    console.log('\t socket.io:: client disconnected ' + socket_.userid + ' ' + socket_.session.id);
+                    console.log('\t socket.io:: client disconnected ' + cl_id + ' ' + accepted_session.id);
                     //If the client was in a session, set by sv.find_session_,
                     //we can tell the session server to update that session state.
-                    if (socket_ && socket_.session.id) {
+                    if (socket_ && accepted_session.id) {
                         //avatar leaving a session should destroy that session
-                        _this4.end_session_(socket_.session.id, socket_.userid);
+                        _this4.destroy_session_(accepted_session.id, cl_id);
                     }
                 });
             });
@@ -581,7 +635,7 @@ var SvPresenter = (function () {
         }
     }, {
         key: 'on_recv_message_',
-        value: function on_recv_message_(socket_, packet_) {
+        value: function on_recv_message_(socket_, cl_id_, packet_) {
             var _this5 = this;
 
             if (this.fake_latency && packet_.split('.')[0].substr(0, 1) == 'i') {
@@ -601,9 +655,10 @@ var SvPresenter = (function () {
         key: 'proc_packet_',
         value: function proc_packet_(socket_, packet_) {
             //Cut the packet up into sub components
-            var packet_parts = packet_.split('.');
+            var packet_parts = packet_.split('.'),
+
             //The first is always the type of packet
-            var packet_type = packet_parts[0];
+            packet_type = packet_parts[0];
 
             var other_client = null;
             if (socket_.session.socket_host.userid == socket_.userid) {
@@ -631,9 +686,9 @@ var SvPresenter = (function () {
             //The input commands come in like u-l,
             //so we split them up into separate commands,
             //and then update the avatars
-            var input_commands = parts_[1].split('-');
-            var input_time = parts_[2].replace('-', '.');
-            var input_seq = parts_[3];
+            var input_commands = parts_[1].split('-'),
+                input_time = parts_[2].replace('-', '.'),
+                input_seq = parts_[3];
 
             //the client should be in a session, so
             //we can tell that session to handle the input
@@ -642,59 +697,26 @@ var SvPresenter = (function () {
             }
         }
     }, {
-        key: 'create_session_',
-        value: function create_session_(socket_) {
-            //Create a new session instance, this actually runs the
-            //session code like collisions and such.
-            var session = new SvSession(socket_);
-
-            //Store it in the list of session
-            this.sessions[session.id] = session;
-            //Keep track
-            this.session_count++;
-
-            //Start updating the session loop on the server
-            session.update(new Date().getTime());
-            //tell the avatar that they are now the host
-            //s=server message, h=you are hosting
-            socket_.send('s.h.' + String(cm.get_owntime()).replace('.', '-'));
-            console.log('server host at  ' + cm.get_owntime());
-            socket_.session = session;
-            socket_.hosting = true;
-            this.log_('host ' + socket_.userid + ' created a session with id ' + socket_.session.id);
-            //return it
-            return session;
-        }
-    }, {
-        key: 'end_session_',
-        value: function end_session_(session_id_, user_id_) {
-            var session = this.sessions[session_id_];
-            if (!session) {
-                this.log_('that session was not found!');return;
-            }
-
-            //stop the session updates immediate
-            var left_socket = session.stop(user_id_);
-            if (left_socket) {
-                this.find_session_(left_socket);
-            }
-
-            delete this.sessions[session_id_];
-            this.session_count--;
-            this.log_('session removed. there are now ' + this.session_count + ' sessions');
-        }
-    }, {
         key: 'find_session_',
-        value: function find_session_(socket_) {
+        value: function find_session_(cl_socket_, cl_id_) {
+            //Generate a new UUID, looks something like
+            //5b2ca132-64bd-4513-99da-90e838ca47d1
+            //and store this on their socket/connection
+            cl_socket_.userid = cl_id_;
+
+            //tell the avatar they connected, giving them their id
+            cl_socket_.emit('onconnected', { id: cl_id_ });
+
             this.log_('looking for a session. We have : ' + this.session_count);
             //if there are any sessions at all, no sessions? create one!
             if (!this.session_count) {
-                this.create_session_(socket_);return;
+                return this.create_session_(cl_socket_, cl_id_);
             }
 
             //so there are sessions active,
             //lets see if one needs another avatar
-            var joined_a_session = false;
+            var joined_a_session = false,
+                found_session = null;
             //Check the list of sessions for an open session
             for (var session_id in this.sessions) // for all sessions
             {
@@ -703,17 +725,56 @@ var SvPresenter = (function () {
                     continue;
                 }
                 //get the session we are checking against
-                var session = this.sessions[session_id];
-
+                found_session = this.sessions[session_id];
                 //someone wants us to join!
-                joined_a_session = session.try_to_start(socket_) || joined_a_session;
+                joined_a_session = found_session.try_to_start(cl_socket_, cl_id_) || joined_a_session;
             }
 
             //now if we didn't join a session,
             //we must create one
             if (!joined_a_session) {
-                this.create_session_(socket_);
+                return this.create_session_(cl_socket_, cl_id_);
             }
+            return found_session;
+        }
+    }, {
+        key: 'create_session_',
+        value: function create_session_(host_socket_, cl_id_) {
+            //Create a new session instance, this actually runs the
+            //session code like collisions and such.
+            var session = new SvSession(host_socket_, cl_id_);
+
+            //Store it in the list of session
+            this.sessions[session.id] = session;
+            //Keep track
+            this.session_count++;
+            //Start updating the session loop on the server
+            session.update(new Date().getTime());
+
+            host_socket_.session = session;
+
+            console.log('server host at  ' + cm.get_owntime());
+            this.log_('host ' + cl_id_ + ' created a session with id ' + host_socket_.session.id);
+            //return it
+            return session;
+        }
+    }, {
+        key: 'destroy_session_',
+        value: function destroy_session_(session_id_, userid_) {
+            var session = this.sessions[session_id_];
+            if (!session) {
+                this.log_('that session was not found!');return;
+            }
+
+            //stop the session updates immediate
+            var left_socket = session.stop(userid_);
+            if (left_socket) {
+                this.find_session_(left_socket);
+            }
+
+            delete this.sessions[session_id_];
+            this.session_count--;
+            this.log_('session removed. there are now ' + this.session_count + ' sessions');
         }
     }]);
 
